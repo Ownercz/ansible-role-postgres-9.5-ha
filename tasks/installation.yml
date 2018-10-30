@@ -1,0 +1,14 @@
+- name: Instaluje PostgreSQL repozitare
+  yum:
+    name: https://download.postgresql.org/pub/repos/yum/9.5/redhat/rhel-7-x86_64/pgdg-centos95-9.5-2.noarch.rpm
+    state: latest
+
+- name: Instalace PostgreSQL vcetne vsech doplnku
+  yum:
+    name: postgresql95,postgresql95-server,postgresql95-libs,postgresql95-contrib,postgresql95-devel,python-psycopg2
+    state: latest
+
+- name: Instalace pgbench
+  yum:
+    name:  postgresql-contrib
+    state: latest

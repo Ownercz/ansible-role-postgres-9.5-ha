@@ -1,0 +1,44 @@
+- name: "Configure scripts: Create directory"
+  file: path="/opt/hapgsql/" state=directory
+
+- name: "Configure scripts: ha_startup.sh"
+  template:
+    src: ha_startup.j2
+    dest: "{{ ha_directory }}/ha_startup.sh"
+    mode: "a+x"
+
+- name: "Configure scripts: ha_script.sh"
+  template:
+    src: ha_script.j2
+    dest: "{{ ha_directory }}/ha_script.sh"
+    mode: "a+x"
+
+- name: "Configure scripts: ha_service_check.sh"
+  template:
+    src: ha_service_check.j2
+    dest: "{{ ha_directory }}/ha_service_check.sh"
+    mode: "a+x"
+
+- name: "Configure scripts: ha_check_wrapper.sh"
+  template:
+    src: ha_check_wrapper.j2
+    dest: "{{ ha_directory }}/ha_check_wrapper.sh"
+    mode: "a+x"
+
+- name: "Configure scripts: backup postgresql-master.conf"
+  template:
+    src: postgresql-master.conf.j2
+    dest: "{{ ha_directory }}/postgresql-master.conf"
+    mode: "a+x"
+
+- name: "Configure scripts: backup postgresql-slave.conf"
+  template:
+    src: postgresql-slave.conf.j2
+    dest: "{{ ha_directory }}/postgresql-slave.conf"
+    mode: "a+x"
+
+- name: "Configure scripts: backup recovery.conf"
+  template:
+    src: recovery.conf.j2
+    dest: "{{ ha_directory }}/recovery.conf"
+    mode: "a+x"

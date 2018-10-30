@@ -1,0 +1,370 @@
+#!/usr/bin/env bash
+
+#common ips
+ens_dev="{{ ens_dev}}"
+ens_mgmt="{{ ens_mgmt }}"
+ip_slave="{{ ip_slave }}"
+ip_master="{{ip_master}}"
+#ip_mgmt="" #pro kazdy stroj nastavit zvlast!!!
+{% if 'dev01' in ansible_hostname %}
+ip_mgmt="{{ ip_mgmt_01 }}"
+{% else %}
+ip_mgmt="{{ ip_mgmt_02 }}"
+{% endif %}
+gateway="{{ gateway }}"
+ip_clear="{{ ip_clear }}"
+firstrun_conn="{{ firstrun_adapter }}"
+
+
+#Now code
+#Zkontroluje IP adresu nastavenou na adapteru.
+#Pokud je nastavena prazdna IP adresa, nezapiname nic a cekame na firstrun ha_scriptu.
+#Pokud je nastavena IP masteru a master na siti je, prejde do IP slave.
+#Pokud je nastavena slave IP a slave na siti neni, zapne interface.
+#Pokud je nastavena slave IP a slave na siti jiz je, nezapina interface a ceka.
+
+check_ip(){
+ip_dev=$(nmcli c s ens224 | grep "ipv4.addresses:" | awk -F':' '{ gsub (" ", "", $0); print $2}' | rev | cut -c4- | rev)
+
+
+if [ "$ip_dev" = "$ip_clear" ]; then
+echo "Not valid IP on PGSQL interface, no action taken."
+exit 1
+fi
+
+
+
+if [ "$ip_dev" = "$ip_master" ]; then
+echo "Master IP previously set on interface, checking network for master..."
+ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+if [ $? -eq 0 ]; then
+  echo "Error - another master already present and online."
+  echo "Fallbacking as slave node."
+  /bin/bash /opt/hapgsql/ha_script.sh makestandby # misto masazani sebe sama a udelani noveho slavu prejit ze stareho masteru do replikace
+else
+  echo "Starting up master node."
+  bring_c_up
+fi
+
+fi
+
+if [ "$ip_dev" = "$ip_slave" ]; then
+echo "Slave IP previously set on interface, checking network for slave..."
+ping -q -c1 -W 1 $ip_slave   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+if [ $? -eq 0 ]; then
+  echo "Error - another slave already present and online."
+  echo "Nothing to do here, as setup is limited to one slave."
+  exit 1
+else
+  echo "Starting up slave node."
+  bring_c_up
+fi
+fi
+
+}
+
+bring_c_up(){
+nmcli device connect $ens_dev
+}
+
+bring_down(){
+nmcli d d $ens_dev > /dev/null 2>&1
+}
+
+turn_to_slave(){
+  ping -q -c1 -W 1 $ip_slave   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+  if [ $? -eq 0 ]; then
+    echo "Master AND slave IP is already taken."
+    echo "Nothing to do here, as setup is limited to one master and one slave."
+    exit 1
+  else
+    prepare_slave_ip
+    bring_c_up
+  fi
+
+}
+
+prepare_slave_ip(){
+echo "Preparing SLAVE IP on PGSQL interface"
+nmcli con mod $ens_dev ipv4.addresses $ip_slave/24 gw4 $gateway
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+nmcli device disconnect $ens_dev
+fi
+echo "SLAVE IP ready, waiting..."
+}
+
+wait_for_network(){
+  wait
+
+}
+wait(){
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+  network=$(systemctl is-active network)
+  if [ $network = "inactive" ]; then #protoze while cyklus s "done" exitne cely proces jezus christ be praised Henry
+    echo "inactive"
+    sleep 10
+  fi
+
+
+
+}
+echo "Starting PgSQL initialization..."
+touch /opt/hapgsql/running
+wait_for_network
+echo "Network initialization in progress..."
+bring_down
+echo "IP initialization in progress..."
+check_ip
+echo "Enabling node status monitor..."
+rm -f /opt/hapgsql/running

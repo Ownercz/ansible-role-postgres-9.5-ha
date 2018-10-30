@@ -1,0 +1,14 @@
+- include_tasks: exchange-keys.yml #ok
+- include_tasks: installation.yml #ok
+- include_tasks: post-installation.yml #ok
+- include_tasks: ha-users.yml #ok
+- include_tasks: ha-configuration-master.yml #ok
+- include_tasks: transfer-data.yml #ok
+- include_tasks: ha-configuration-slave.yml #ok
+- include_tasks: ha-scripts.yml #ok
+- include_tasks: chown.yml #ok
+- include_tasks: initialize-interfaces.yml #ok
+- include_tasks: interfaces-crontab-entry.yml #ok
+#service stopped > restart > if not running go down and promote slave
+#ping stopped > wait 5s > promote slave (but check IP)
+#IP conflict > if nmcli connection drops > go down with interface

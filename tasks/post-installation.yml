@@ -1,0 +1,10 @@
+- name: "Check if PgSQL was configured"
+  command: ls /var/lib/pgsql/9.5/data
+  register: pgsql_dir
+
+- name: PgSQL reinicialisation
+  shell: /usr/pgsql-9.5/bin/postgresql95-setup initdb
+  when: pgsql_dir.stdout == ""
+
+- name: Systemd service setup for PostgreSQL
+  service: name=postgresql-9.5 state=started enabled=yes

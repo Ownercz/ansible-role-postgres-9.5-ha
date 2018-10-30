@@ -1,0 +1,5 @@
+- name: Restart pgsql service
+  service:
+    name: postgresql-9.5
+    state: restarted
+  listen: restart pgsql-9.5

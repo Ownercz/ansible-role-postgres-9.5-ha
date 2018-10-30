@@ -1,0 +1,8 @@
+- cron:
+    name: "Initialize interfaces"
+    special_time: reboot
+    job: "/opt/hapgsql/ha_startup.sh 2>&1"
+
+- cron:
+    name: "Check service"
+    job: "/opt/hapgsql/ha_check_wrapper.sh > /dev/null 2>&1"

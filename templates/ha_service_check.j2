@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+
+#common ips
+ens_dev="{{ ens_dev}}"
+ens_mgmt="{{ ens_mgmt }}"
+ip_slave="{{ ip_slave }}"
+ip_master="{{ip_master}}"
+#ip_mgmt="" #pro kazdy stroj nastavit zvlast!!!
+{% if 'dev01' in ansible_hostname %}
+ip_mgmt="{{ ip_mgmt_01 }}"
+{% else %}
+ip_mgmt="{{ ip_mgmt_02 }}"
+{% endif %}
+gateway="{{ gateway }}"
+ip_clear="{{ ip_clear }}"
+firstrun_conn="{{ firstrun_adapter }}"
+
+#todo
+#pokud postgresql-9.5 padne, tak zkusit restart
+#pokud jsem master, tak shodil a poslat pozadavek na promote SLAVE
+#pokud jsem slave, tak dam info, smazu se a zahajim replikaci znova
+
+master_check(){
+ service_state=$(systemctl is-active postgresql-9.5)
+ if [[ "$service_state" != "active" ]]; then
+   systemctl start postgresql-9.5
+   service_state=$(systemctl is-active postgresql-9.5)
+   if [[ "$service_state" != "active" ]]; then
+     master_disable
+     echo "Error on master server, turning taking this node offline."
+  else
+    echo "Master restarted after service problem.";
+  fi
+else
+ #echo "master active";
+ exit 0
+fi
+}
+
+master_disable(){
+   bash /opt/hapgsql/ha_script.sh disableactive
+}
+
+slave_check(){
+  ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+  #TODO krome pingu testovat i master query
+  if [ $? -ne 0 ]; then
+    slave_promote
+    echo "Slave has been promoted."
+    exit
+  fi
+  service_state=$(systemctl is-active postgresql-9.5)
+  if [[ "$service_state" != "active" ]]; then
+    systemctl start postgresql-9.5
+    service_state=$(systemctl is-active postgresql-9.5)
+    if [[ "$service_state" != "active" ]]; then
+      slave_reinicalise
+      #reinicializovat slave, pokud existuje primary
+      echo "Slave was reinicialised."
+
+   else
+     echo "Slave was restarted.";
+   fi
+ else
+#     echo "slave active";
+exit 0
+  fi
+
+}
+
+slave_reinicalise(){
+  ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+  if [ $? -eq 0 ]; then
+    slave_makestandby
+  else
+    slave_promote #TODO opravit tuto blbost
+  fi
+
+}
+
+slave_makestandby(){
+  ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+  if [ $? -eq 0 ]; then
+ bash /opt/hapgsql/ha_script.sh makestandby
+else
+ echo "Error - master not present on network."
+fi
+}
+
+slave_promote(){
+  ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+  if [ $? -ne 0 ]; then
+ bash /opt/hapgsql/ha_script.sh promote
+ fi
+}
+
+notset(){
+  slave_makestandby
+}
+
+ha_check(){
+uptime=$(awk '{print $1}' /proc/uptime)
+if [ "$uptime" > 120 ]; then
+  ip_dev=$(nmcli c s ens224 | grep "ipv4.addresses:" | awk -F':' '{ gsub (" ", "", $0); print $2}' | rev | cut -c4- | rev)
+
+
+  if [ "$ip_dev" = "$ip_clear" ]; then
+    notset
+  fi
+
+  if [ "$ip_dev" = "$ip_master" ]; then
+   master_check
+  fi
+
+  if [ "$ip_dev" = "$ip_slave" ]; then
+    slave_check
+  fi
+
+fi
+}
+ha_check

@@ -1,0 +1,37 @@
+- name: First run
+  shell: ./ha_script.sh firstrun
+  args:
+    chdir: /opt/hapgsql/
+#  when: pro oba dva
+
+- name: Make master active
+  shell: ./ha_script.sh makeactive
+  args:
+    chdir: /opt/hapgsql/
+  when: "'dev01' in inventory_hostname_short"
+
+
+#cd /opt/hapgsql/
+#./ha_script.sh firstrun
+#./ha_script.sh makeactive
+
+#sudo -u postgres psql postgres
+#CREATE TABLE guestbook (visitor_email text, vistor_id serial, date timestamp, message text);
+#INSERT INTO guestbook (visitor_email, date, message) VALUES ( 'bietcin@mail.cz', current_date, 'Bietka pracuje v CIKTu, na FSS a u KofiKofi.');
+
+- name: Standby node activate
+  shell: ./ha_script.sh makestandby
+  args:
+    chdir: /opt/hapgsql/
+  when: "'dev02' in inventory_hostname_short"
+
+
+#cd /opt/hapgsql/
+#./ha_script.sh firstrun
+#./ha_script.sh makestandby
+
+#sudo -u postgres psql postgres
+#CREATE TABLE guestbook (visitor_email text, vistor_id serial, date timestamp, message text);
+#INSERT INTO guestbook (visitor_email, date, message) VALUES ( 'jim@gmail.com', current_date, 'This is a test.');
+
+#sudo -u postgres psql postgres

@@ -1,0 +1,10 @@
+- file:
+    path: /opt/
+    owner: postgres
+    group: postgres
+    recurse: yes
+- file:
+    path: /var/lib/pgsql/
+    owner: postgres
+    group: postgres
+    recurse: yes

@@ -1,0 +1,27 @@
+- name: Vytvoreni replikacniho uctu PostgreSQL
+  postgresql_user:
+    name: "{{ pgsql_replication_user }}"
+    password: "{{ pgsql_replication_password }}"
+    role_attr_flags: REPLICATION
+  become: True
+  become_user: postgres
+
+- name: Prirazeni pravomoci pro replication uzivatele
+  template:
+    src: pg_hba.conf.j2
+    dest: "{{ pgsql_95_data_directory }}/pg_hba.conf"
+  with_items: "{{ pgsql_users }}"
+
+- name: "Konfigurace .pgpass pro postgres uzivatele"
+  shell: "echo '*:*:*:{{ pgsql_replication_user }}:{{ pgsql_replication_password }}' > ~postgres/.pgpass"
+
+- name: "Nastaveni pristupovych prav souboru .pgpass"
+  file:
+    path: ~postgres/.pgpass
+    state: file
+    owner: "postgres"
+    group: "postgres"
+    mode: 0600
+
+- name: Restart PostgreSQL
+  service: name=postgresql-9.5 state=restarted enabled=yes

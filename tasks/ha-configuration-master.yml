@@ -1,0 +1,22 @@
+-  file:
+    path: /opt/pgsql/archivedir/
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: 0777
+
+-  file:
+    path: /opt/trigger/
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: 0777
+#  when: "'dev01' in inventory_hostname_short"
+
+- name: Nastaveni konfiguracniho souboru postgresql.conf
+  template:
+    src: postgresql-master.conf.j2
+    dest: "{{ pgsql_95_data_directory }}/postgresql.conf"
+  notify:
+    - restart pgsql-9.5
+  when: "'dev01' in inventory_hostname_short"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+#common ips
+ens_dev="{{ ens_dev}}"
+ens_mgmt="{{ ens_mgmt }}"
+ip_slave="{{ ip_slave }}"
+ip_master="{{ip_master}}"
+#ip_mgmt="" #pro kazdy stroj nastavit zvlast!!!
+{% if 'dev01' in ansible_hostname %}
+ip_mgmt="{{ ip_mgmt_01 }}"
+{% else %}
+ip_mgmt="{{ ip_mgmt_02 }}"
+{% endif %}
+gateway="{{ gateway }}"
+ip_clear="{{ ip_clear }}"
+firstrun_conn="{{ firstrun_adapter }}"
+
+#Now code
+
+ip_dev=$(nmcli c s ens224 | grep "ipv4.addresses:" | awk -F':' '{ gsub (" ", "", $0); print $2}' | rev | cut -c4- | rev)
+if [ "$ip_dev" = "$ip_slave" ]; then
+systemctl stop postgresql-9.5
+rm /opt/failover/turnnow -fvr
+rm -fvr /var/lib/pgsql/9.5/data
+pg_basebackup -c fast -X stream -h $ip_master -U replicationusr -D /var/lib/pgsql/9.5/data
+copy /opt/pgsqlha/slaveconf/recovery.conf /var/lib/pgsql/9.5/data/recovery.conf
+copy /opt/pgsqlha/slaveconf/postgresql.conf /var/lib/pgsql/9.5/data/postgresql.conf
+mkdir /opt/pgsql
+mkdir /opt/pgsql/archivedir
+chown postgres /opt/pgsql/archivedir/ -R
+chmod 0777 /opt/pgsql/archivedir/ -R
+mkdir /var/lib/pgsql/9.5/data/mnt
+mkdir /var/lib/pgsql/9.5/data/mnt/server
+mkdir /var/lib/pgsql/9.5/data/mnt/server/archivedir
+systemctl start postgresql-9.5
+fi

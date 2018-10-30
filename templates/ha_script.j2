@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+
+#todo
+#set connection name equal to device name then continue to prepare_standby_ip
+ens_dev="{{ ens_dev}}"
+ens_mgmt="{{ ens_mgmt }}"
+ip_slave="{{ ip_slave }}"
+ip_master="{{ip_master}}"
+#ip_mgmt="" #pro kazdy stroj nastavit zvlast!!!
+{% if 'dev01' in ansible_hostname %}
+ip_mgmt="{{ ip_mgmt_01 }}"
+{% else %}
+ip_mgmt="{{ ip_mgmt_02 }}"
+{% endif %}
+gateway="{{ gateway }}"
+ip_clear="{{ ip_clear }}"
+firstrun_conn="{{ firstrun_adapter }}"
+
+name_it(){
+#nmcli --terse --fields DEVICE dev status
+#get connection names
+nmcli c u "$firstrun_conn"
+dev1=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_dev" | awk -F':' '{print $1}')
+dev2=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_dev" | awk -F':' '{print $2}')
+
+if [ "$dev1" != "$dev2" ]; then
+conn_dev_name=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_dev" | awk -F':' '{print $2}')
+echo "Renaming $ens_dev - $conn_dev_name to $ens_dev"
+nmcli c modify "$conn_dev_name" connection.id $ens_dev
+fi
+
+dev1=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_mgmt" | awk -F':' '{print $1}')
+dev2=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_mgmt" | awk -F':' '{print $2}')
+if [ "$dev1" != "$dev2" ]; then
+conn_mgmt_name=$(nmcli --terse --fields DEVICE,CONNECTION dev status| grep "$ens_mgmt" | awk -F':' '{print $2}')
+echo "Renaming $ens_mgmt - $conn_mgmt_name to $ens_dev"
+nmcli c modify "$conn_mgmt_name" connection.id $ens_mgmt
+fi
+
+nmcli conn modify $ens_mgmt ipv4.method auto
+nmcli conn modify $ens_dev ipv4.method manual ipv4.addresses $ip_clear/24 gw4 $gateway
+nmcli con mod $ens_mgmt connection.autoconnect yes
+nmcli con mod $ens_dev connection.autoconnect no #pak musime udelat script na @boot v crontabu, ktery to zapne
+nmcli c d $ens_dev
+nmcli c u $ens_dev
+
+}
+
+disable_node(){
+systemctl stop postgresql-9.5
+check=$(nmcli --terse dev status | grep "$ens_dev" | awk -F':' '{print $3}' | grep "disconnected")
+if [ "$check" ]; then
+	echo "Interface is already down."
+else
+nmcli device disconnect $ens_dev
+nmcli con mod $ens_dev ipv4.addresses $ip_clear/24 gw4 $gateway
+fi
+}
+
+transfer_data_from_master(){ #always after
+rm -rfv {{ pgsql_95_data_directory }}
+rm -rfv /opt/pgsql/archivedir/ #experimental and will break things
+#mkdir {{ pgsql_95_data_directory }}
+sudo -u postgres pg_basebackup -c fast -X stream -h $ip_master -U {{ pgsql_replication_user }} -D {{ pgsql_95_data_directory }}
+cp {{ ha_directory }}/postgresql-slave.conf {{ pgsql_95_data_directory }}/postgresql.conf
+cp  {{ ha_directory }}/recovery.conf {{ pgsql_95_data_directory }}/recovery.conf
+chown postgres {{ pgsql_95_data_directory }}/postgresql.conf
+chown postgres {{ pgsql_95_data_directory }}/recovery.conf
+}
+
+make_slave_node(){
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+echo "Turning off active MASTER interface $ens_dev"
+nmcli device disconnect $ens_dev
+fi
+systemctl stop postgresql-9.5
+prepare_slave_ip
+transfer_data_from_master
+bring_up_slave
+systemctl start postgresql-9.5
+}
+
+make_master_node(){
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+echo "Turning off active SLAVE interface $ens_dev"
+nmcli device disconnect $ens_dev
+fi
+prepare_master_ip
+bring_up_master
+systemctl start postgresql-9.5
+}
+
+promote_to_master_node(){
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+echo "Turning off active SLAVE interface $ens_dev"
+nmcli device disconnect $ens_dev
+fi
+prepare_master_ip
+promote
+systemctl start postgresql-9.5
+}
+bring_up_slave(){
+	ping -q -c1 -W 1 $ip_slave   > /dev/null 2>&1 #arping -c 4 -I $ens_mgmt $ip_slave
+	if [ $? -eq 0 ]; then
+		echo "IP conflict, slave IP already present on the network!"
+		echo "Exiting."
+		exit 1
+	else
+		echo "Slave IP is avaiable"
+		echo "Turning on PgSQL interface"
+		nmcli device connect $ens_dev
+		#kontrola jestli mame IP
+		ping -q -c1 -W 1 $ip_slave   > /dev/null 2>&1 #arping -c 4 -I $ens_mgmt $ip_slave
+		if [ $? -eq 0 ]; then
+			echo "Slave IP set"
+			else
+				echo "Can't set Slave IP"
+				fi
+	fi
+}
+
+bring_up_master(){
+	ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+	if [ $? -eq 0 ]; then
+		echo "IP conflict, master IP already present on the network!"
+		echo "Exiting."
+		exit 1
+	else
+		echo "Master IP is avaiable"
+		echo "Turning on PgSQL interface"
+		nmcli device connect $ens_dev
+		#kontrola jestli mame IP
+		#arping -c 4 -s $ip_master -I $ens_mgmt $broadcast
+		ping -q -c1 -W 1 $ip_master  > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			echo "Master IP set."
+			else
+				echo "Can't set Master IP"
+				fi
+	fi
+}
+
+bring_check(){
+
+check=$(nmcli connection show | grep "$ens_dev") #https://unix.stackexchange.com/questions/372733/get-output-and-return-value-of-grep-in-single-operation-in-bash vystup z grepu koreluje s status codem, takze staci if check na jeho variable
+if [[ "$check" ]]; then
+echo "Interface found..."
+else
+echo "Interface not found, exiting."
+exit 1
+fi
+}
+
+prepare_slave_ip(){
+echo "Preparing SLAVE IP on PGSQL interface"
+nmcli con mod $ens_dev ipv4.addresses $ip_slave/24 gw4 $gateway
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+nmcli device disconnect $ens_dev
+fi
+echo "SLAVE IP ready, waiting for interface"
+}
+
+prepare_master_ip(){
+nmcli con mod $ens_dev ipv4.addresses $ip_master/24 gw4 $gateway
+check=$(nmcli connection show --active | grep "$ens_dev")
+if [[ "$check" ]]; then
+nmcli device disconnect $ens_dev
+fi
+echo "MASTER IP ready, waiting for interface"
+}
+
+clean_interface(){
+	ip addr del $ip_slave/24 dev $ens_dev  > /dev/null 2>&1
+	ip addr del $ip_master/24 dev $ens_dev  > /dev/null 2>&1
+	ip addr del $ip_clear /24 dev $ens_dev > /dev/null 2>&1
+	check=$(nmcli connection show --active | grep "$ens_dev")
+	if [[ "$check" ]]; then
+	nmcli device disconnect $ens_dev
+	fi
+}
+
+promote(){
+	ping -q -c1 -W 1 $ip_master   > /dev/null 2>&1 #-I $ens_mgmt $broadcast
+	if [ $? -eq 0 ]; then
+		echo "IP conflict, master already present on the network."
+		echo "Exiting."
+		exit 1
+	else
+		echo "IP Master is avaiable..."
+		echo "Turning on PgSQL interface."
+		nmcli device connect $ens_dev
+		#kontrola jestli mame IP
+		#arping -c 4 -s $ip_master -I $ens_mgmt $broadcast
+		ping -q -c1 -W 1 $ip_master  > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			echo "Master IP enabled."
+			touch /opt/trigger/turnnow
+			else
+				echo "Can't set Master IP."
+				fi
+	fi
+}
+
+case "$1" in
+  firstrun)
+    name_it
+		;;
+	disableactive)
+		bring_check
+		disable_node
+		;;
+	makeactive)
+	  bring_check
+		clean_interface
+	  make_master_node
+		;;
+	makestandby)
+	  bring_check
+		clean_interface
+	  make_slave_node
+		;;
+	promote)
+  	bring_check
+  	clean_interface
+  	promote_to_master_node
+		;;
+	*)
+		echo "Usage: $0 {firstrun|disableactive|makeactive|makestandby|promote}"
+		exit 3
+		;;
+esac
